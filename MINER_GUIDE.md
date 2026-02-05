@@ -116,6 +116,14 @@ Your weighted score = `tokens_per_sec × league_multiplier`
 Run the Step 1 script to get started immediately:
 
 ```bash
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+pip install -e .
+
 # Set your GitHub credentials
 export GITHUB_TOKEN="your_token"
 export GITHUB_USERNAME="your_username"
@@ -158,6 +166,13 @@ export TARGET_SEQUENCE_LENGTH=100000
 ```bash
 git clone https://github.com/SILX-LABS/QUASAR-SUBNET
 cd QUASAR-SUBNET
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# or: venv\Scripts\activate  # Windows
+
+# Install dependencies
 pip install -r requirements.txt
 pip install -e .
 ```

@@ -117,7 +117,15 @@ Located in `fla/ops/quasar/`:
 git clone https://github.com/troy12x/flash-linear-attention
 cd flash-linear-attention
 
-# 2. Run baseline benchmarks
+# 2. Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+
+# 3. Install dependencies
+pip install -e .
+pip install triton torch
+
+# 4. Run baseline benchmarks
 python -c "
 import torch
 import time
