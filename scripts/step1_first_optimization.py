@@ -414,7 +414,9 @@ def run_optimized_benchmark(repo_path: Path, baseline_results: dict):
                 'vram_mb': vram_mb
             }
 
-            baseline_tps = baseline_results[str(seq_len)]['tokens_per_sec']
+            # Handle both int and string keys (int from memory, string from JSON)
+            baseline_key = seq_len if seq_len in baseline_results else str(seq_len)
+            baseline_tps = baseline_results[baseline_key]['tokens_per_sec']
             improvement = ((tokens_per_sec - baseline_tps) / baseline_tps) * 100
 
             status = "✓" if improvement > 0 else "→"
@@ -494,12 +496,15 @@ def prepare_submission(repo_path: Path, results: dict, github_username: str):
             'vram_mb': data['vram_mb']
         }
 
+    # Handle both int and string keys
+    best_key = best_seq_len if best_seq_len in results else str(best_seq_len)
+
     submission = {
         "fork_url": f"https://github.com/{github_username}/flash-linear-attention",
         "commit_hash": commit_hash,
         "target_sequence_length": best_seq_len,
         "tokens_per_sec": best_tps,
-        "vram_mb": results[str(best_seq_len)]['vram_mb'],
+        "vram_mb": results[best_key]['vram_mb'],
         "benchmarks": benchmarks
     }
 

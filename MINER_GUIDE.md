@@ -13,6 +13,107 @@ QUASAR is a **kernel optimization competition**. Miners compete by optimizing Tr
 5. Validators clone your repo, verify performance, and run logit verification
 6. **Top 4 miners share rewards** (60% / 25% / 10% / 5%)
 
+## Complete Setup Guide (Example: A100 PCIe 80GB)
+
+### Step 1: Clone QUASAR-SUBNET
+
+```bash
+git clone https://github.com/SILX-LABS/QUASAR-SUBNET
+cd QUASAR-SUBNET
+```
+
+### Step 2: Create Virtual Environment
+
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# or: venv\Scripts\activate  # Windows
+```
+
+### Step 3: Install QUASAR Dependencies
+
+```bash
+pip install -r requirements.txt
+pip install -e .
+```
+
+### Step 4: Set Environment Variables
+
+```bash
+export GITHUB_TOKEN="your_github_token"
+export GITHUB_USERNAME="your_github_username"
+```
+
+### Step 5: Clone flash-linear-attention
+
+```bash
+mkdir -p quasar_work
+cd quasar_work
+git clone https://github.com/troy12x/flash-linear-attention
+cd flash-linear-attention
+```
+
+### Step 6: Install flash-linear-attention (Same venv)
+
+```bash
+# Make sure venv is still activated
+pip install -e .
+```
+
+### Step 7: Verify Installation
+
+```bash
+python -c 'import torch; print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}")'
+python -c 'from fla.layers.quasar import QuasarAttention; print("fla installed")'
+```
+
+### Step 8: Run Baseline Benchmark
+
+```bash
+cd /path/to/QUASAR-SUBNET
+python scripts/step1_first_optimization.py --skip-setup
+```
+
+### Step 9: Tune Kernels
+
+```bash
+python scripts/step2_kernel_tuning.py
+```
+
+## A100 PCIe 80GB Configuration
+
+### Optimal Triton Settings
+
+```python
+BLOCK_M = 128
+BLOCK_N = 128
+BLOCK_K = 32
+num_stages = 3
+num_warps = 8
+```
+
+### Target Sequence Lengths
+
+| Sequence Length | Expected VRAM | League Multiplier |
+|-----------------|---------------|-------------------|
+| 500k            | ~40GB         | 1.5x              |
+| 750k            | ~55GB         | 2.0x              |
+| 1M              | ~70GB         | **3.0x** (Target) |
+
+### Expected Performance
+
+- **Target**: 40,000-60,000 tokens/sec at 1M context
+- **Weighted Score**: 120,000-180,000 (with 3.0x multiplier)
+
+## GPU Configuration Reference
+
+| GPU | VRAM | Max Sequence | Recommended Config |
+|-----|------|--------------|-------------------|
+| RTX 3090 | 24GB | ~200k | BLOCK_M=64, BLOCK_N=64, num_stages=2 |
+| RTX 4090 | 24GB | ~250k | BLOCK_M=64, BLOCK_N=128, num_stages=2 |
+| A100 PCIe | 80GB | **1M+** | BLOCK_M=128, BLOCK_N=128, num_stages=3 |
+| H100 PCIe | 80GB | **1M+** | BLOCK_M=128, BLOCK_N=256, num_stages=4 |
+
 ## Critical Requirements
 
 ### 1. Logit Verification (Must Pass)
@@ -111,73 +212,9 @@ Your weighted score = `tokens_per_sec × league_multiplier`
 3. Submission timestamp (ascending - **first wins ties**)
 4. Submission ID (final tiebreaker)
 
-## Quick Start: First Optimization
+## Submission Methods
 
-Run the Step 1 script to get started immediately:
-
-```bash
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-pip install -e .
-
-# Set your GitHub credentials
-export GITHUB_TOKEN="your_token"
-export GITHUB_USERNAME="your_username"
-
-# Run the guided optimization script
-python scripts/step1_first_optimization.py
-```
-
-This script will:
-1. Check your environment (Python, CUDA, Triton)
-2. Clone the flash-linear-attention repository
-3. Run baseline benchmarks
-4. Show optimization opportunities
-5. Verify correctness
-6. Prepare your submission payload
-
-## Setup
-
-### Prerequisites
-
-- Python 3.9+
-- CUDA-capable GPU (16GB+ VRAM recommended)
-- GitHub account with API token
-- Bittensor wallet with registration on netuid 439
-
-### Environment Variables
-
-```bash
-export GITHUB_TOKEN="your_github_token"
-export GITHUB_USERNAME="your_github_username"
-export VALIDATOR_API_URL="https://quasar-subnet.onrender.com"
-
-# Optional
-export AGENT_ITERATIONS=100
-export TARGET_SEQUENCE_LENGTH=100000
-```
-
-### Installation
-
-```bash
-git clone https://github.com/SILX-LABS/QUASAR-SUBNET
-cd QUASAR-SUBNET
-
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or: venv\Scripts\activate  # Windows
-
-# Install dependencies
-pip install -r requirements.txt
-pip install -e .
-```
-
-### Running the Miner
+### Option 1: Direct Submission
 
 ```bash
 python neurons/miner.py \
@@ -188,25 +225,12 @@ python neurons/miner.py \
   --axon.port 8091
 ```
 
-## Submission Methods
-
-### Option 1: Direct Submission
-
-Submit your optimization directly:
-
-```bash
-python neurons/miner.py \
-  --wallet.name miner \
-  --wallet.hotkey default
-```
-
 ### Option 2: Commit-Reveal (Recommended for IP Protection)
 
 Prevents validators from copying your code before evaluation:
 
 **Phase 1 - Commit:**
 ```bash
-# Submit hash of your submission
 curl -X POST https://quasar-subnet.onrender.com/commit_submission \
   -H "Content-Type: application/json" \
   -d '{
@@ -246,84 +270,6 @@ curl -X POST https://quasar-subnet.onrender.com/reveal_submission \
 | `/get_current_round` | GET | Current competition round info |
 | `/health` | GET | API health check |
 
-### Direct Submission Payload
-
-```json
-{
-  "miner_hotkey": "your_ss58_address",
-  "fork_url": "https://github.com/you/flash-linear-attention",
-  "commit_hash": "abc123def456...",
-  "target_sequence_length": 1000000,
-  "tokens_per_sec": 50000.0,
-  "vram_mb": 8192.0,
-  "benchmarks": {
-    "4096": {"tokens_per_sec": 80000, "vram_mb": 2048},
-    "16384": {"tokens_per_sec": 65000, "vram_mb": 4096},
-    "100000": {"tokens_per_sec": 55000, "vram_mb": 6144},
-    "1000000": {"tokens_per_sec": 50000, "vram_mb": 16000}
-  },
-  "signature": "signed_message_hex"
-}
-```
-
-## Benchmarking
-
-### Local Benchmark Script
-
-```python
-import torch
-import time
-import json
-from fla.layers.quasar import QuasarAttention
-
-def benchmark(seq_len, num_runs=10):
-    model = QuasarAttention(
-        hidden_size=512, head_dim=64, num_heads=8, mode='chunk'
-    ).cuda().eval()
-
-    x = torch.randn(1, seq_len, 512, device='cuda')
-
-    # Warmup
-    for _ in range(3):
-        with torch.autocast('cuda', dtype=torch.bfloat16):
-            model(x)
-    torch.cuda.synchronize()
-
-    torch.cuda.reset_peak_memory_stats()
-
-    # Benchmark
-    start = time.time()
-    for _ in range(num_runs):
-        with torch.autocast('cuda', dtype=torch.bfloat16):
-            model(x)
-    torch.cuda.synchronize()
-    elapsed = time.time() - start
-
-    tokens_per_sec = (seq_len * num_runs) / elapsed
-    vram_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
-
-    return tokens_per_sec, vram_mb
-
-# Test at target sequence lengths
-results = {}
-for seq_len in [4096, 16384, 65536, 100000, 500000, 1000000]:
-    try:
-        tps, vram = benchmark(seq_len)
-        results[seq_len] = {'tokens_per_sec': tps, 'vram_mb': vram}
-        print(f'{seq_len}: {tps:,.0f} tok/s | {vram:.0f} MB')
-    except torch.cuda.OutOfMemoryError:
-        print(f'{seq_len}: OOM')
-        break
-
-print(json.dumps(results, indent=2))
-```
-
-### Run Tests
-
-```bash
-python -m pytest tests/test_quasar_mining.py -v
-```
-
 ## Optimization Strategies
 
 ### 1. Target High League Multipliers
@@ -353,6 +299,17 @@ First submission wins ties. If you achieve the same weighted score as another mi
 Validators verify your claimed performance. If actual < claimed × 0.9, you get zero score. Be conservative in your claims.
 
 ## Troubleshooting
+
+### Module Not Found: fla
+
+```bash
+# Make sure you're in the venv
+source venv/bin/activate
+
+# Install flash-linear-attention
+cd quasar_work/flash-linear-attention
+pip install -e .
+```
 
 ### Logit Verification Failed
 
