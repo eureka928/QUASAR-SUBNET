@@ -218,6 +218,9 @@ def run_correctness_check(repo_path: str, seq_len: int = 4096) -> Dict:
             with torch.autocast('cuda', dtype=torch.bfloat16):
                 with torch.no_grad():
                     out = model(x)
+                    # Handle tuple return (output, state)
+                    if isinstance(out, tuple):
+                        out = out[0]
                     outputs.append(out.clone())
 
         # Check for NaN/Inf
