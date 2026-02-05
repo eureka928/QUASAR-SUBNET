@@ -91,16 +91,20 @@ def validate_imports(repo_path: str) -> Tuple[bool, List[str]]:
 
 
 # =============================================================================
-# LEAGUE MULTIPLIERS (matches real validator scoring)
+# LEAGUE MULTIPLIERS (matches real validator scoring from validator_api/app.py)
 # =============================================================================
 
 LEAGUE_CONFIG = {
-    "2M":    {"min_seq": 2_000_000, "multiplier": 4.0},
-    "1.5M":  {"min_seq": 1_500_000, "multiplier": 3.5},
-    "1M":    {"min_seq": 1_000_000, "multiplier": 3.0},
-    "512K":  {"min_seq": 512_000,   "multiplier": 2.0},
-    "124K":  {"min_seq": 124_000,   "multiplier": 1.5},
-    "32K":   {"min_seq": 32_000,    "multiplier": 1.0},
+    "1M":   {"min_seq": 1_000_000, "multiplier": 3.0},
+    "900k": {"min_seq": 900_000,   "multiplier": 2.5},
+    "800k": {"min_seq": 800_000,   "multiplier": 2.25},
+    "700k": {"min_seq": 700_000,   "multiplier": 2.0},
+    "600k": {"min_seq": 600_000,   "multiplier": 1.75},
+    "500k": {"min_seq": 500_000,   "multiplier": 1.5},
+    "400k": {"min_seq": 400_000,   "multiplier": 1.25},
+    "300k": {"min_seq": 300_000,   "multiplier": 1.0},
+    "200k": {"min_seq": 200_000,   "multiplier": 0.75},
+    "100k": {"min_seq": 100_000,   "multiplier": 0.5},
 }
 
 def get_league(seq_len: int) -> Tuple[str, float]:
@@ -108,7 +112,7 @@ def get_league(seq_len: int) -> Tuple[str, float]:
     for league_name, config in LEAGUE_CONFIG.items():
         if seq_len >= config["min_seq"]:
             return league_name, config["multiplier"]
-    return "Mini", 0.5
+    return "100k", 0.5
 
 
 # =============================================================================

@@ -29,14 +29,18 @@ def print_header(title: str):
     print(f"{'=' * 70}\n")
 
 
-# League configuration
+# League configuration (matches validator_api/app.py)
 LEAGUE_CONFIG = {
-    "2M":    {"min_seq": 2_000_000, "multiplier": 4.0, "color": "\033[95m"},  # Magenta
-    "1.5M":  {"min_seq": 1_500_000, "multiplier": 3.5, "color": "\033[94m"},  # Blue
-    "1M":    {"min_seq": 1_000_000, "multiplier": 3.0, "color": "\033[92m"},  # Green
-    "512K":  {"min_seq": 512_000,   "multiplier": 2.0, "color": "\033[93m"},  # Yellow
-    "124K":  {"min_seq": 124_000,   "multiplier": 1.5, "color": "\033[96m"},  # Cyan
-    "32K":   {"min_seq": 32_000,    "multiplier": 1.0, "color": "\033[0m"},   # Default
+    "1M":   {"min_seq": 1_000_000, "multiplier": 3.0,  "color": "\033[92m"},  # Green
+    "900k": {"min_seq": 900_000,   "multiplier": 2.5,  "color": "\033[92m"},  # Green
+    "800k": {"min_seq": 800_000,   "multiplier": 2.25, "color": "\033[93m"},  # Yellow
+    "700k": {"min_seq": 700_000,   "multiplier": 2.0,  "color": "\033[93m"},  # Yellow
+    "600k": {"min_seq": 600_000,   "multiplier": 1.75, "color": "\033[96m"},  # Cyan
+    "500k": {"min_seq": 500_000,   "multiplier": 1.5,  "color": "\033[96m"},  # Cyan
+    "400k": {"min_seq": 400_000,   "multiplier": 1.25, "color": "\033[0m"},   # Default
+    "300k": {"min_seq": 300_000,   "multiplier": 1.0,  "color": "\033[0m"},   # Default
+    "200k": {"min_seq": 200_000,   "multiplier": 0.75, "color": "\033[90m"},  # Gray
+    "100k": {"min_seq": 100_000,   "multiplier": 0.5,  "color": "\033[90m"},  # Gray
 }
 RESET_COLOR = "\033[0m"
 
@@ -199,7 +203,7 @@ def display_league_summary(submissions: List[Dict]):
     print(f"{'League':<10} {'Mult':<8} {'Submissions':<12} {'Best Tok/s':<15} {'Best Weighted'}")
     print("-" * 65)
 
-    for league in ["2M", "1.5M", "1M", "512K", "124K", "32K"]:
+    for league in ["1M", "900k", "800k", "700k", "600k", "500k", "400k", "300k", "200k", "100k"]:
         if league in league_stats:
             stats = league_stats[league]
             color = stats["color"]
@@ -309,8 +313,9 @@ def main():
     4th place: 5%
 
   League Multipliers:
-    2M:   4.0x  |  1.5M: 3.5x  |  1M:   3.0x
-    512K: 2.0x  |  124K: 1.5x  |  32K:  1.0x
+    1M:   3.0x  |  900k: 2.5x  |  800k: 2.25x |  700k: 2.0x
+    600k: 1.75x |  500k: 1.5x  |  400k: 1.25x |  300k: 1.0x
+    200k: 0.75x |  100k: 0.5x
 """)
 
 

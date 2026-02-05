@@ -110,37 +110,48 @@ def run_final_benchmark(seq_len: int = 1000000):
 
 
 def get_league_multiplier(seq_len: int) -> float:
-    """Get league multiplier based on sequence length."""
-    if seq_len >= 2_000_000:
-        return 4.0
-    elif seq_len >= 1_500_000:
-        return 3.5
-    elif seq_len >= 1_000_000:
+    """Get league multiplier based on sequence length (matches validator_api/app.py)."""
+    if seq_len >= 1_000_000:
         return 3.0
-    elif seq_len >= 512_000:
+    elif seq_len >= 900_000:
+        return 2.5
+    elif seq_len >= 800_000:
+        return 2.25
+    elif seq_len >= 700_000:
         return 2.0
-    elif seq_len >= 124_000:
+    elif seq_len >= 600_000:
+        return 1.75
+    elif seq_len >= 500_000:
         return 1.5
-    elif seq_len >= 32_000:
+    elif seq_len >= 400_000:
+        return 1.25
+    elif seq_len >= 300_000:
         return 1.0
+    elif seq_len >= 200_000:
+        return 0.75
     return 0.5
 
 
 def get_league_name(seq_len: int) -> str:
-    """Get league name based on sequence length."""
-    if seq_len >= 2_000_000:
-        return "2M"
-    elif seq_len >= 1_500_000:
-        return "1.5M"
-    elif seq_len >= 1_000_000:
+    """Get league name based on sequence length (matches validator_api/app.py)."""
+    if seq_len >= 1_000_000:
         return "1M"
-    elif seq_len >= 512_000:
-        return "512K"
-    elif seq_len >= 124_000:
-        return "124K"
-    elif seq_len >= 32_000:
-        return "32K"
-    return "Mini"
+    elif seq_len >= 900_000:
+        return "900k"
+    elif seq_len >= 800_000:
+        return "800k"
+    elif seq_len >= 700_000:
+        return "700k"
+    elif seq_len >= 600_000:
+        return "600k"
+    elif seq_len >= 500_000:
+        return "500k"
+    elif seq_len >= 400_000:
+        return "400k"
+    elif seq_len >= 300_000:
+        return "300k"
+        return "200k"
+    return "100k"
 
 
 def verify_correctness():
