@@ -42,17 +42,20 @@ def get_gpu_info() -> Dict:
 
     props = torch.cuda.get_device_properties(0)
 
+    # Get shared memory (handle different PyTorch versions)
+    shared_mem = getattr(props, 'shared_memory_per_block', 49152)  # default 48KB
+
     info = {
         'name': props.name,
         'compute_capability': f"{props.major}.{props.minor}",
         'sm_count': props.multi_processor_count,
         'total_memory_gb': props.total_memory / 1e9,
-        'shared_memory_per_block': props.max_shared_memory_per_block,
-        'shared_memory_per_block_kb': props.max_shared_memory_per_block / 1024,
-        'registers_per_block': props.regs_per_block,
-        'warp_size': props.warp_size,
+        'shared_memory_per_block': shared_mem,
+        'shared_memory_per_block_kb': shared_mem / 1024,
+        'registers_per_block': getattr(props, 'regs_per_block', 65536),  # default
+        'warp_size': getattr(props, 'warp_size', 32),
         'max_threads_per_block': props.max_threads_per_block,
-        'max_threads_per_sm': props.max_threads_per_multi_processor,
+        'max_threads_per_sm': getattr(props, 'max_threads_per_multi_processor', 2048),
     }
 
     # Determine GPU category for recommendations
@@ -606,6 +609,9 @@ def main():
     # Summary
     print_header("STEP 2 COMPLETE - Summary")
 
+    league_multipliers = {'100k': '0.5x', '300k': '1.0x', '500k': '1.5x', '700k': '2.0x', '1M': '3.0x'}
+    multiplier = league_multipliers.get(args.target_league, '1.0x')
+
     print(f"""
 GPU: {gpu_info['name']} ({gpu_info['category']})
 
@@ -622,7 +628,7 @@ Next Steps:
   4. Benchmark again: python scripts/step2_kernel_tuning.py
   5. Submit when you see improvement!
 
-Target: {args.target_league} league ({{'100k': '0.5x', '300k': '1.0x', '500k': '1.5x', '700k': '2.0x', '1M': '3.0x'}}['{args.target_league}']} multiplier)
+Target: {args.target_league} league ({multiplier} multiplier)
 """)
 
 
