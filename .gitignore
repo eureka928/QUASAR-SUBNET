@@ -168,8 +168,14 @@ testing/
 .env
 
 
-# .md files
+# .md files (except key documentation)
 *.md
+!README.md
+!CLAUDE.md
+!MINER_GUIDE.md
+!KERNEL_OPTIMIZATION_STRATEGY.md
+!DEPLOYMENT_GUIDE.md
+!DOCKER_DEPLOYMENT.md
 
 # .db files
 *.db
