@@ -136,21 +136,26 @@ def profile_kernel(seq_len: int = 16384) -> Dict:
     }
 
     print("\nTop 10 CUDA Operations by Time:")
-    print(f"{'Operation':<50} {'CUDA Time (ms)':<15} {'Calls':<10}")
+    print(f"{'Operation':<50} {'Time (ms)':<15} {'Calls':<10}")
     print("-" * 75)
 
-    sorted_events = sorted(events, key=lambda x: x.cuda_time_total, reverse=True)
+    # Handle different PyTorch versions - use cuda_time_total if available, else self_cuda_time_total or cpu_time_total
+    def get_cuda_time(event):
+        return getattr(event, 'cuda_time_total', 0) or getattr(event, 'self_cuda_time_total', 0) or getattr(event, 'cpu_time_total', 0)
+
+    sorted_events = sorted(events, key=get_cuda_time, reverse=True)
 
     for event in sorted_events[:10]:
-        if event.cuda_time_total > 0:
-            cuda_time_ms = event.cuda_time_total / 1000  # Convert to ms
-            results['total_cuda_time_ms'] += cuda_time_ms
+        event_time = get_cuda_time(event)
+        if event_time > 0:
+            time_ms = event_time / 1000  # Convert to ms
+            results['total_cuda_time_ms'] += time_ms
             results['top_kernels'].append({
                 'name': event.key[:50],
-                'cuda_time_ms': cuda_time_ms,
+                'cuda_time_ms': time_ms,
                 'calls': event.count,
             })
-            print(f"{event.key[:50]:<50} {cuda_time_ms:<15.3f} {event.count:<10}")
+            print(f"{event.key[:50]:<50} {time_ms:<15.3f} {event.count:<10}")
 
     return results
 
