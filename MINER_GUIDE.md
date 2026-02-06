@@ -25,9 +25,9 @@ cd QUASAR-SUBNET
 ### Step 2: Create Virtual Environment
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or: venv\Scripts\activate  # Windows
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# or: .venv\Scripts\activate  # Windows
 ```
 
 ### Step 3: Install QUASAR Dependencies
@@ -37,7 +37,32 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-### Step 4: Set Environment Variables
+### Step 4: Configure Environment
+
+Create a `.env` file in the project root:
+
+```bash
+# Required
+GITHUB_TOKEN="your_github_token"
+GITHUB_USERNAME="your_github_username"
+
+# Miner settings (optional - defaults shown)
+VALIDATOR_API_URL="http://localhost:8000"
+NETUID=24
+SUBTENSOR_NETWORK="test"
+WALLET_MINER_NAME="quasar_miner"
+WALLET_HOTKEY="default"
+TARGET_SEQUENCE_LENGTH=100000
+AGENT_ITERATIONS=100
+OPTIMIZATION_INTERVAL=300
+
+# Inference server settings (optional)
+MINER_INFERENCE_PORT=8001
+REFERENCE_MODEL="Qwen/Qwen2.5-0.5B-Instruct"
+DEVICE="cuda"
+```
+
+Or export directly:
 
 ```bash
 export GITHUB_TOKEN="your_github_token"
@@ -56,7 +81,7 @@ cd flash-linear-attention
 ### Step 6: Install flash-linear-attention (Same venv)
 
 ```bash
-# Make sure venv is still activated
+# Make sure .venv is still activated
 pip install -e .
 ```
 
@@ -79,6 +104,36 @@ python scripts/step1_first_optimization.py --skip-setup
 ```bash
 python scripts/step2_kernel_tuning.py
 ```
+
+## Running with Startup Scripts
+
+The project includes startup scripts that handle environment setup automatically. They load `.env`, activate `.venv`, and check prerequisites.
+
+### Start Miner
+
+```bash
+./START_MINER.sh
+```
+
+This runs `python -m neurons.miner` with settings from `.env`. It checks for `GITHUB_TOKEN`, `GITHUB_USERNAME`, CUDA availability, and validator API connectivity.
+
+### Start Inference Server
+
+```bash
+./START_MINER_INFERENCE.sh
+```
+
+Runs an inference server on port 8001 (configurable via `MINER_INFERENCE_PORT`). The server loads the reference model (`Qwen/Qwen2.5-0.5B-Instruct` by default) and exposes:
+- `POST /inference` - Run inference with logit capture
+- `GET /health` - Health check
+
+### Start Validator
+
+```bash
+./START_VALIDATOR.sh
+```
+
+Runs `python -m neurons.validator` with logit verification and commit-reveal settings from `.env`. Requires the validator API to be running first (`./START_SERVER.sh`).
 
 ## A100 PCIe 80GB Configuration
 
@@ -214,7 +269,14 @@ Your weighted score = `tokens_per_sec × league_multiplier`
 
 ## Submission Methods
 
-### Option 1: Direct Submission
+### Option 1: Direct Submission (via startup script)
+
+```bash
+# Configure in .env, then:
+./START_MINER.sh
+```
+
+Or run manually:
 
 ```bash
 python neurons/miner.py \
@@ -303,8 +365,8 @@ Validators verify your claimed performance. If actual < claimed × 0.9, you get 
 ### Module Not Found: fla
 
 ```bash
-# Make sure you're in the venv
-source venv/bin/activate
+# Make sure you're in the .venv
+source .venv/bin/activate
 
 # Install flash-linear-attention
 cd quasar_work/flash-linear-attention

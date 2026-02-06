@@ -4,111 +4,109 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-QUASAR is a Bittensor subnet (netuid 439/24) for evaluating long-context language models (32k to 2M tokens). Miners run long-context models and respond to benchmark evaluation requests; validators assess performance using LongBench, HotpotQA, GovReport, and Needle-in-Haystack datasets.
+QUASAR is a Bittensor subnet (netuid 439 mainnet / 24 testnet) where miners compete to write the fastest Triton GPU kernels for QuasarAttention. Miners optimize kernels in a forked `flash-linear-attention` repo, validators benchmark submissions in sandboxed Docker containers, and a FastAPI server coordinates everything.
+
+Scoring: `weighted_score = tokens_per_sec × league_multiplier` (league multipliers range from 0.5x at 100k tokens to 3.0x at 1M+). Top 4 miners share rewards (60/25/10/5%). Logit verification against `Qwen/Qwen2.5-0.5B-Instruct` is required (cosine_sim ≥ 0.99, max_diff ≤ 0.1).
 
 ## Common Commands
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-pip install -e .
+# Install
+pip install -r requirements.txt && pip install -e .
 
-# Run miner
-python neurons/miner.py \
-  --wallet.name miner --wallet.hotkey default \
-  --subtensor.network finney --netuid 439 \
-  --axon.port 8091 --miner.model_name "silx-ai/Quasar-2M-Base"
-
-# Run miner with agent-based kernel optimization
-export GITHUB_TOKEN="your_token"
-export VALIDATOR_API_URL="https://quasar-subnet.onrender.com"
-export AGENT_ITERATIONS=100
+# Run miner (requires GITHUB_TOKEN, VALIDATOR_API_URL env vars)
 python neurons/miner.py --wallet.name miner --wallet.hotkey default
 
 # Run validator
-python neurons/validator.py \
-  --netuid 24 --subtensor.network finney \
-  --wallet.name validator --wallet.hotkey default \
-  --neuron.polling_interval 300
+python neurons/validator.py --netuid 24 --subtensor.network finney \
+  --wallet.name validator --wallet.hotkey default
 
-# Run tests (requires GPU and fla package)
+# Run validator in mock mode (local testing, no blockchain)
+python neurons/validator.py --mock --logging.debug
+
+# Run tests (requires GPU + fla package installed)
 python -m pytest tests/test_quasar_mining.py -v
-
-# Run a single test
 python -m pytest tests/test_quasar_mining.py::test_quasar_basic -v
 
-# Linting
+# Lint
 black --line-length 79 --check .
 pylint --fail-on=W,E,F .
 
-# Docker deployment
+# Docker
 docker-compose up --build
 
-# Mock mode for local testing
-python neurons/validator.py --mock --logging.debug
+# Local kernel validation (test before submitting)
+python scripts/local_validator.py --repo-path ./quasar_work/flash-linear-attention --seq-len 4096
+python scripts/local_validator.py --repo-path ./quasar_work/flash-linear-attention --seq-len 1000000
+python scripts/local_validator.py --repo-path ./quasar_work/flash-linear-attention --full
 ```
 
 ## Architecture
 
-### Core Components
+```
+Miner (neurons/miner.py)
+  ├── Optimizes Triton kernels in quasar_work/flash-linear-attention/fla/ops/quasar/
+  ├── Benchmarks throughput at target sequence lengths
+  └── Submits results + git commit hash to Validator API
 
-1. **Miners** (`neurons/miner.py`): Load long-context models, process evaluation requests, stream responses to validators
+Validator API (validator_api/app.py)
+  ├── FastAPI + SQLAlchemy (SQLite/PostgreSQL)
+  ├── Tracks submissions, IP rate-limiting, commit-reveal anti-cheat
+  └── Serves /submit_submission, /get_submission_stats, /leaderboard
 
-2. **Validators** (`neurons/validator.py`): Poll API for submissions, create Docker containers for sandboxed code execution, evaluate against test cases, update scores
+Validator (neurons/validator.py)
+  ├── Polls API for pending submissions
+  ├── Clones miner repos, validates imports, benchmarks in Docker
+  ├── Runs logit verification (inference_verification.py)
+  └── Sets weights on Bittensor chain
 
-3. **Validator API** (`validator_api/app.py`): FastAPI REST API with SQLAlchemy ORM for submission management, rate limiting, CORS support
-
-4. **Challenge Runner** (`challenge/server.py`, `challenge/code_runner.py`): Docker-based sandboxed code execution with ephemeral python:3.11-slim containers
-
-5. **Core Library** (`quasar/`):
-   - `protocol.py`: Synapse definitions (InfiniteContextSynapse, CommitRevealData, BenchmarkTaskInfo)
-   - `benchmarks/`: Benchmark loaders for LongBench, HotpotQA, GovReport, Needle-in-Haystack
-   - `base/`: BaseMinerNeuron, BaseValidatorNeuron
-   - `validator/`: Reward calculation, scoring, diversity tracking
-   - `inference_verification.py`: Logit verification for miner submissions
-
-### Reward Calculation
-
-```python
-accuracy = metric_fn(response, expected_answer)  # F1, EM, or ROUGE
-multiplier = {32k: 1.0, 124k: 1.2, 512k: 1.5, 1.5m: 1.8, 2m: 2.0}
-reward = min(accuracy * multiplier, 1.0)
+Challenge Runner (challenge/code_runner.py)
+  └── Ephemeral Docker containers: no network, 30s timeout, blocked imports
 ```
 
-### Scoring Weights (from subnet_config.json)
+### Kernel Optimization Target
 
-- Memory retention: 35%, Position understanding: 25%, Coherence: 20%, Tokens/sec: 10%, Scaling efficiency: 10%
-- Context multipliers: 32k=1.0x, 124k=1.2x, 512k=1.5x, 1.5M=1.8x, 2M=2.0x
-- Exponential bonus for memory retention > 0.8 (score^2)
+The core optimization target is `quasar_work/flash-linear-attention/fla/ops/quasar/`:
 
-### Docker Container Flow
+| File | Purpose |
+|------|---------|
+| `chunk.py` | Main chunk-wise forward pass (primary optimization target) |
+| `forward_substitution.py` | Triangular solve kernel |
+| `chunk_intra_token_parallel.py` | Intra-token parallel variant |
+| `fused_recurrent.py` | Fused recurrent implementation |
+| `gate.py` | Gating operations |
 
-Validator creates ephemeral containers per submission:
-1. Start python:3.11-slim container with code_runner.py mounted
-2. Health check, then execute all test cases sequentially
-3. Destroy container after completion
+The `QuasarAttention` layer (`fla/layers/quasar.py`) calls into these ops. The validator benchmarks through `QuasarAttention(hidden_size=512, head_dim=64, num_heads=8, mode="chunk")`.
 
-Security: no network access, no write access, dangerous imports blocked, 30-second timeout.
+### Scoring & Leagues
 
-## Key Files
+```
+weighted_score = tokens_per_sec × league_multiplier
 
-- `quasar/protocol.py`: Defines InfiniteContextSynapse for miner-validator communication
-- `neurons/miner.py`: Miner with agent-based kernel optimization
-- `neurons/validator.py`: Validator with Docker container evaluation
-- `validator_api/app.py`: REST API server
-- `challenge/code_runner.py`: Sandboxed execution handler
-- `subnet_config.json`: Scoring weights and benchmark configs
+100k: 0.5x  |  200k: 0.75x  |  300k: 1.0x   |  400k: 1.25x  |  500k: 1.5x
+600k: 1.75x |  700k: 2.0x   |  800k: 2.25x  |  900k: 2.5x   |  1M+: 3.0x
+```
 
-## Tech Stack
+### Core Library (`quasar/`)
 
-- **Core**: Python 3.9+, Bittensor 7.0+, PyTorch 2.0+
-- **LLM**: Transformers 4.30+, supports Qwen, Kimi, Quasar models
-- **Web**: FastAPI, Uvicorn, SQLAlchemy (SQLite/PostgreSQL)
-- **Evaluation**: ROUGE, Jieba, FuzzyWuzzy for metrics
-- **Monitoring**: WandB integration
+- `protocol.py` — Synapse definitions: InfiniteContextSynapse, CommitRevealData, BenchmarkTaskInfo, InferenceVerificationSynapse
+- `base/` — BaseMinerNeuron, BaseValidatorNeuron (Bittensor lifecycle)
+- `validator/reward.py` — Reward calculation with scoring weights from `subnet_config.json`
+- `benchmarks/` — Loaders for LongBench, HotpotQA, GovReport, Needle-in-Haystack
+- `inference_verification.py` — Logit comparison against reference model
 
 ## Configuration
 
-- `subnet_config.json`: Scoring weights, context length tests [1000, 5000, 15000, 50000, 100000], evaluation cycle (90s)
-- `hfa_config.json`: Model parameters, max context (100k tokens), checkpoint intervals
-- GPU memory: Set `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` for better memory management
+- `subnet_config.json` — Scoring weights (memory_retention 35%, position_understanding 25%, coherence 20%, tokens_per_sec 10%, scaling_efficiency 10%), evaluation cycle 90s
+- `hfa_config.json` — Model params, max context 100k tokens, checkpoint intervals
+- `.env` — Secrets: GITHUB_TOKEN, WALLET_MINER_NAME, WALLET_HOTKEY, NETUID, VALIDATOR_API_URL
+- Set `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` for GPU memory management
+
+## Key Patterns
+
+- The `q.view(B, H, NT, BT, S)` reshape from `[B, T, H, S]` in `chunk.py` interleaves H and T dims — this is the existing convention throughout the codebase, do not change it
+- Triton kernels use `tl.constexpr` for block sizes; `tl.dot` requires power-of-2 inner dims ≥ 16
+- Triton autotune `key` params must exactly match kernel argument names
+- Reference patterns for kernel optimization live in `fla/ops/common/chunk_delta_h.py` (state recurrence) and `fla/ops/delta_rule/wy_fast.py` (fused W+U)
+- Tests require GPU; test framework includes OOM retry with parameter degradation
+- Forbidden imports in kernel files: `fla.ops.gla`, `fla.ops.kda`
