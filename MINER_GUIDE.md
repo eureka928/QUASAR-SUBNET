@@ -360,7 +360,95 @@ First submission wins ties. If you achieve the same weighted score as another mi
 
 Validators verify your claimed performance. If actual < claimed × 0.9, you get zero score. Be conservative in your claims.
 
+## GPU Memory Configuration
+
+Set this environment variable to avoid CUDA OOM fragmentation issues:
+
+```bash
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+```
+
+To make it persistent:
+
+```bash
+# Project-level (loaded by START_MINER.sh automatically)
+echo 'PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True' >> .env
+
+# System-wide (all terminals)
+echo 'export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True' >> ~/.bashrc
+source ~/.bashrc
+```
+
+## Local Validation (Test Before Submitting)
+
+Always validate locally before submitting to avoid failed validations and potential IP bans.
+
+```bash
+# Quick correctness check (fast, small sequence)
+python scripts/local_validator.py --repo-path ./quasar_work/flash-linear-attention --seq-len 4096
+
+# Performance benchmark at 1M (3x league multiplier)
+python scripts/local_validator.py --repo-path ./quasar_work/flash-linear-attention --seq-len 1000000
+
+# Full validation across all sequence lengths
+python scripts/local_validator.py --repo-path ./quasar_work/flash-linear-attention --full
+```
+
+The validator checks:
+- **No NaN/Inf** in outputs
+- **Consistency** across repeated runs
+- **Cosine similarity** >= 0.99 against reference model
+- **Max absolute diff** <= 0.1
+- **Tokens/sec** throughput and weighted score
+
+## Running the Miner (Process Management)
+
+### Foreground (simplest)
+
+```bash
+./START_MINER.sh
+# Stop with Ctrl+C
+```
+
+### Background with log file
+
+```bash
+./START_MINER.sh > miner.log 2>&1 &
+
+# Check logs
+tail -f miner.log
+```
+
+### Using screen (recommended for SSH sessions)
+
+```bash
+# Start a named session
+screen -S miner
+./START_MINER.sh
+
+# Detach: Ctrl+A then D
+# Reattach later:
+screen -r miner
+```
+
+### Using pm2 (auto-restart on crashes)
+
+```bash
+npm install -g pm2
+
+pm2 start ./START_MINER.sh --name quasar-miner
+pm2 logs quasar-miner    # check logs
+pm2 restart quasar-miner # restart
+pm2 stop quasar-miner    # stop
+```
+
 ## Troubleshooting
+
+### Module Not Found: cryptography
+
+```bash
+pip install cryptography
+```
 
 ### Module Not Found: fla
 
@@ -389,6 +477,31 @@ pip install -e .
 - Always run `torch.cuda.synchronize()` before timing
 - Use warmup runs before benchmarking
 - Test on similar hardware to validators
+
+### Code Changes Not Taking Effect
+
+The miner clones your repo from GitHub to `/tmp/flash-linear-attention-miner/`. Local-only changes won't work. You must **commit and push** to your GitHub repo:
+
+```bash
+cd quasar_work/flash-linear-attention
+git add -A && git commit -m "your message" && git push
+```
+
+Then restart the miner.
+
+### Running Two Miners on One Server
+
+Requires **multiple GPUs** and **separate hotkeys**:
+
+```bash
+# Miner 1 on GPU 0
+CUDA_VISIBLE_DEVICES=0 python -m neurons.miner --wallet.hotkey hotkey-001 ...
+
+# Miner 2 on GPU 1
+CUDA_VISIBLE_DEVICES=1 python -m neurons.miner --wallet.hotkey hotkey-002 ...
+```
+
+Not practical with a single GPU — both miners would compete for VRAM and compute, lowering both scores.
 
 ### Submission Rejected
 
