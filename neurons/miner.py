@@ -136,6 +136,13 @@ class Miner(BaseMinerNeuron):
         self.context_max_size = int(os.getenv("CONTEXT_MAX_SIZE", "200000"))
         self.repo_hash = None  # Will be calculated during optimization loop
 
+        # Context and BYOC defaults
+        self.use_full_context = False
+        self.byoc_file_path = None
+        self.context_max_files = 50
+        self.context_max_size = 200000
+        self.repo_hash = None
+
     def _estimate_model_size(self, model_name: str) -> float:
         """Estimate model size in billions of parameters (Phase 2)."""
         # Extract from name or use defaults
@@ -879,7 +886,16 @@ class Miner(BaseMinerNeuron):
                 repo_context = None
                 self.repo_hash = None
         else:
-            self.repo_hash = None
+            # Compute repo_hash from kernel file for consistent submissions
+            try:
+                import hashlib
+                chunk_path = os.path.join(repo_path, "fla", "ops", "quasar", "chunk.py")
+                if os.path.exists(chunk_path):
+                    with open(chunk_path, 'r') as f:
+                        self.repo_hash = hashlib.sha256(f.read().encode()).hexdigest()[:16]
+                    print(f"[MINER] Kernel hash: {self.repo_hash}", flush=True)
+            except Exception as e:
+                print(f"[MINER] ⚠️  Failed to compute kernel hash: {e}", flush=True)
 
         for iteration in range(self.agent_iterations):
             print(f"\n[MINER] --- Iteration {iteration + 1}/{self.agent_iterations} ---", flush=True)
@@ -1115,14 +1131,18 @@ class Miner(BaseMinerNeuron):
                 )
                 
                 thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+                thread.daemon = True
                 thread.start()
 
                 accumulated_response = ""
                 for new_text in streamer:
                     print(new_text, end="", flush=True)
                     accumulated_response += new_text
-                thread.join()
-                print() 
+                thread.join(timeout=300)  # 5 minute timeout
+                if thread.is_alive():
+                    print("\n[MINER] ⚠️  LLM generation timed out after 300s, skipping...", flush=True)
+                    accumulated_response = ""
+                print()
                 
                 # Aggressively clear GPU memory after generation
                 print("[MINER] Clearing GPU memory after code generation...", flush=True)
@@ -1493,8 +1513,6 @@ if __name__ == "__main__":
         if args.byoc_file:
             miner.byoc_file_path = args.byoc_file
             print(f"[MINER] BYOC mode enabled: {args.byoc_file}", flush=True)
-        if not hasattr(miner, 'use_full_context'):
-            miner.use_full_context = False
         if args.use_full_context is not None:
             miner.use_full_context = args.use_full_context
         miner.context_max_files = args.context_max_files
