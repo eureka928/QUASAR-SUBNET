@@ -1493,6 +1493,8 @@ if __name__ == "__main__":
         if args.byoc_file:
             miner.byoc_file_path = args.byoc_file
             print(f"[MINER] BYOC mode enabled: {args.byoc_file}", flush=True)
+        if not hasattr(miner, 'use_full_context'):
+            miner.use_full_context = False
         if args.use_full_context is not None:
             miner.use_full_context = args.use_full_context
         miner.context_max_files = args.context_max_files
